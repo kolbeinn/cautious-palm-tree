@@ -3,10 +3,19 @@ import PIL
 from PIL import Image
 from PIL.ExifTags import TAGS
 from io import BytesIO
+from imageai.Detection import ObjectDetection
+import os
+import numpy as np
+
+# Initialize object detector
+detector = ObjectDetection()
+detector.setModelTypeAsRetinaNet()
+detector.setModelPath(os.path.join(
+    os.getcwd(), "resnet50_coco_best_v2.1.0.h5"))
+detector.loadModel()
 
 
 def get_image_metadata(url):
-    # First attempt to fetch the image
     response = requests.get(url)
 
     result = {
@@ -18,9 +27,10 @@ def get_image_metadata(url):
     try:
         image = Image.open(BytesIO(response.content))
         result.update(extract_basic_metadata(image))
-    except PIL.UnidentifiedImageError as exc:
-        # I know, I know, overly broad exception handling here
-        result["error"] = exc.strerror
+        result["objects"] = detect_objects(image)
+    except:
+        # The world's most helpful error message
+        result["error"] = "Something went wrong"
 
     return result
 
@@ -56,4 +66,18 @@ def extract_exif_metadata(image):
         if isinstance(data, bytes):
             data = data.decode()
         result[tag] = data
+    return result
+
+
+def detect_objects(image):
+    # Saving the image to disk here, because that's the fastest way to get this code to work.
+    # IRL, I'd make this work without disk writes
+    image.save("temp.jpg")
+    """ Based on the sample code in 
+    https://towardsdatascience.com/object-detection-with-10-lines-of-code-d6cb4d86f606"""
+    execution_path = os.getcwd()
+    detections = detector.detectObjectsFromImage(input_image=os.path.join(
+        execution_path, "temp.jpg"), output_image_path=os.path.join(execution_path, "imagenew.jpg"))
+    result = [{'name': ob["name"], 'probability': ob["percentage_probability"]}
+              for ob in detections]
     return result
